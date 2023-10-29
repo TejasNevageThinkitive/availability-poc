@@ -2,6 +2,7 @@ package com.waystar.waystar.controller;
 
 
 import com.waystar.waystar.entity.BookedSlots;
+import com.waystar.waystar.entity.DayWiseSlotCreation;
 import com.waystar.waystar.entity.dto.AppointmentSlotBookRequest;
 import com.waystar.waystar.entity.dto.AvailabilityRequestResponse;
 import com.waystar.waystar.entity.dto.AvailabilitySlots;
@@ -12,7 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Map;
 
 
@@ -38,6 +38,17 @@ public class AvailabilityController {
     @PostMapping("/book/slot")
     public BookedSlots bookAppointmentSlot(@RequestBody AppointmentSlotBookRequest appointmentSlotBookRequest) {
         return availabilityService.bookSlots(appointmentSlotBookRequest);
+    }
+
+    @GetMapping("/provider/{providerId}/location/{locationId}/date/{date}")
+    public DayWiseSlotCreation getDaySlot(@PathVariable Long providerId, @PathVariable Long locationId, @PathVariable LocalDate date){
+        return availabilityService.getProviderDaySlot(providerId, locationId, date);
+    }
+
+
+    @PutMapping("/update/day-slots")
+    public DayWiseSlotCreation updateDayWiseSlot(@RequestBody DayWiseSlotCreation dayWiseSlotCreation){
+        return availabilityService.updateDayWiseSlots(dayWiseSlotCreation);
     }
 
 

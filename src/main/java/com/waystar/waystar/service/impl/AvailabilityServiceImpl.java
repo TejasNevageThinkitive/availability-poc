@@ -120,22 +120,21 @@ public class AvailabilityServiceImpl implements AvailabilityService {
             DayWiseSlotCreation dayWiseSlotCreation = existDaySlots.get();
             Availability availability = existAvailability.get();
 
-                LocalTime currentSlotTime = dayWiseSlotCreation.getStartTime();
-                while (currentSlotTime.isBefore(dayWiseSlotCreation.getEndTime())) {
+            LocalTime currentSlotTime = dayWiseSlotCreation.getStartTime();
+            while (currentSlotTime.isBefore(dayWiseSlotCreation.getEndTime())) {
 
-                    if (bookedSlotsRepository.findByDateAndProviderIdAndLocationIdAndStartTimeAndEndTime(date, providerId, locationId, currentSlotTime, currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime())).isEmpty()) {
-                        availabilitySlots.add(AvailabilitySlots.builder()
-                                .duration(availability.getInPersonInitialConsultTime())
-                                .date(date)
-                                .status(SlotStatus.AVAILABLE.name())
-                                .startTime(currentSlotTime)
-                                .endTime(currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime()))
-                                .providerId(providerId)
-                                .build());
-                    }
-                    currentSlotTime = currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime()).plusMinutes(availability.getBufferTime());
+                if (bookedSlotsRepository.findByDateAndProviderIdAndLocationIdAndStartTimeAndEndTime(date, providerId, locationId, currentSlotTime, currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime())).isEmpty()) {
+                    availabilitySlots.add(AvailabilitySlots.builder()
+                            .duration(availability.getInPersonInitialConsultTime())
+                            .date(date)
+                            .status(SlotStatus.AVAILABLE.name())
+                            .startTime(currentSlotTime)
+                            .endTime(currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime()))
+                            .providerId(providerId)
+                            .build());
                 }
-
+                currentSlotTime = currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime()).plusMinutes(availability.getBufferTime());
+            }
         }
 
         Pageable pageable = PageRequest.of(page, size);
@@ -155,6 +154,17 @@ public class AvailabilityServiceImpl implements AvailabilityService {
                 .providerId(appointmentSlotBookRequest.getProviderId())
                 .locationId(appointmentSlotBookRequest.getLocationId())
                 .build());
+    }
+
+    @Override
+    public DayWiseSlotCreation getProviderDaySlot(Long providerId, Long locationId, LocalDate date){
+        return dayWiseSlotRepository.findDaySlotsByProviderIdLocationIdAndDateNative(providerId, locationId, date).orElse(null);
+    }
+
+    @Override
+    public DayWiseSlotCreation updateDayWiseSlots(DayWiseSlotCreation dayWiseSlotCreation){
+        DayWiseSlotCreation dayWiseSlotCreation2 =  modelMapper.map(dayWiseSlotCreation, DayWiseSlotCreation.class);
+        return dayWiseSlotRepository.save(dayWiseSlotCreation2);
     }
 
 
