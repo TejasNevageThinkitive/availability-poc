@@ -10,19 +10,21 @@ import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.Instant;
-import java.util.List;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.UUID;
 
 @Data
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
-@Table(name = "availability")
-public class Availability implements Serializable {
+@Table(name = "block_days")
+public class BlockDays implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -31,41 +33,21 @@ public class Availability implements Serializable {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @NotNull
     private UUID uuid;
 
-    @NotNull
-    private int bookingWindow;
+    private LocalDate date;
 
-    @NotNull
-    private String timezone;
+    private LocalTime startTime;
 
-    private String availabilitySettingType;
+    private LocalTime endTime;
 
-    private int inPersonInitialConsultTime;
-
-    private Long inPersonFollowupConsultTime;
-
-    private int bufferTime;
-
-    private Long inPersonBookingIntervalTime;
+    private Long availabilityId;
 
     private Long providerId;
 
-    private Long locationId;
-
-    @Transient
-    private List<BlockDays> blockDays;
-
-    @Transient
-    private List<DayWiseSlotCreation> daySlotCreations;
-
     @PrePersist
-    public void prePersist(){
+    public void prePersist() {
         uuid = UUID.randomUUID();
     }
-
-
-
 
 }

@@ -1,27 +1,19 @@
 package com.waystar.waystar.service;
 
-import com.waystar.waystar.entity.Availability;
 import com.waystar.waystar.entity.BookedSlots;
-import com.waystar.waystar.entity.dto.*;
+import com.waystar.waystar.entity.dto.AppointmentSlotBookRequest;
+import com.waystar.waystar.entity.dto.AvailabilityRequestResponse;
+import com.waystar.waystar.entity.dto.AvailabilitySlots;
+import org.springframework.data.domain.Page;
 
+import java.time.LocalDate;
 import java.util.List;
-import java.util.Set;
-import java.util.UUID;
 
 public interface AvailabilityService {
 
-    void addAvailability(AvailabilityDTO availability) ;
+    void saveProviderAvailability(AvailabilityRequestResponse availabilityRequestResponse);
 
-    Availability getByProviderAndLocation(Long providerId, Long locationId);
-
-    void editAvailability(AvailabilityDTO availability);
-
-//    void addAvailabilityByDate(AvailabilityByDateDTO availability);
-
-    Set<AvailabilityResponse> getAvailability(AvailabilityRequest availabilityRequest);
-
-
-    List<AvailabilitySlots> createAvailabilitySlots(Long locationId, Long providerId);
+    Page<AvailabilitySlots> getAvailabilitySlots(Long locationId, Long providerId, LocalDate date, int page, int size);
 
     BookedSlots bookSlots(AppointmentSlotBookRequest appointmentSlotBookRequest);
 }

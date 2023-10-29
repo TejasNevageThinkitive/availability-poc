@@ -1,200 +1,153 @@
 package com.waystar.waystar.service.impl;
 
-import com.waystar.waystar.entity.*;
-import com.waystar.waystar.entity.dto.*;
-import com.waystar.waystar.entity.enums.AvailabilityOperationType;
-import com.waystar.waystar.repository.*;
+import com.waystar.waystar.entity.Availability;
+import com.waystar.waystar.entity.BookedSlots;
+import com.waystar.waystar.entity.DayWiseSlotCreation;
+import com.waystar.waystar.entity.dto.AppointmentSlotBookRequest;
+import com.waystar.waystar.entity.dto.AvailabilityRequestResponse;
+import com.waystar.waystar.entity.dto.AvailabilitySlots;
+import com.waystar.waystar.entity.dto.SlotStatus;
+import com.waystar.waystar.repository.AvailabilityRepository;
+import com.waystar.waystar.repository.BlockDaysRepository;
+import com.waystar.waystar.repository.BookedSlotRepository;
+import com.waystar.waystar.repository.DayWiseSlotRepository;
 import com.waystar.waystar.service.AvailabilityService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.*;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.temporal.TemporalAdjusters;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 @Service
+@Slf4j
+@Transactional
 @RequiredArgsConstructor
 public class AvailabilityServiceImpl implements AvailabilityService {
 
-    private final AvailabilityRepository availabilityRepo;
+    private final AvailabilityRepository availabilityRepository;
+
+    private final BlockDaysRepository blockDaysRepository;
+
+    private final DayWiseSlotRepository dayWiseSlotRepository;
+
+    private final BookedSlotRepository bookedSlotsRepository;
 
     private final ModelMapper modelMapper;
 
-    private final DayWiseAvailabilityRepository dayWiseAvailabilityRepo;
-
-    private final BlockDayRepository blockDayRepo;
-
-    private final AvailabilityByDateRepository availabilityByDateRepo;
-
-    private final AvailabilityUtilityService availabilityUtilityService;
-
-    private final BookedSlotsRepository bookedSlotsRepository;
-
     @Override
-    public void addAvailability(AvailabilityDTO availability) {
-        Availability existAvailabilityEntity = availabilityRepo.findByLocationIdAndProviderId(availability.getLocationId(), availability.getProviderId());
+    public void saveProviderAvailability(AvailabilityRequestResponse availabilityRequestResponse)  {
 
-        if(Objects.nonNull(existAvailabilityEntity))
-           return;
+        Optional<Availability> alreadyPresentAvailability = availabilityRepository.findByProviderIdAndLocationId(availabilityRequestResponse.getProviderId(), availabilityRequestResponse.getLocationId());
+        Availability availability2 = modelMapper.map(availabilityRequestResponse, Availability.class);
+        if (alreadyPresentAvailability.isEmpty()) {
 
-        Availability availabilityEntity = modelMapper.map(availability, Availability.class);
+            Availability availabilityVersion21 = availabilityRepository.save(availability2);
 
-        Set<DayWiseAvailability> dayWiseAvailabilityEntitySet = availability.getDayWiseAvailabilitySet().stream()
-                .map(dayWiseAvailability -> modelMapper.map(dayWiseAvailability, DayWiseAvailability.class))
-                .collect(Collectors.toSet());
+            //Creating provider availabilities blocked days
+            saveBlockedDays(availability2, availabilityVersion21.getId(), availabilityRequestResponse.getProviderId());
 
-        Set<BlockDay> blockDayEntitySet = availability.getBlockDaySet().stream().map(blockDay -> modelMapper.map(blockDay, BlockDay.class)).collect(Collectors.toSet());
-        availabilityEntity.setDayWiseAvailabilitySet(dayWiseAvailabilityEntitySet);
-        availabilityEntity.setBlockDaySet(blockDayEntitySet);
-        availabilityRepo.save(availabilityEntity);
-    }
+            //Creating Day Wise slots
+            saveDaySlots(availability2, availabilityVersion21.getId(), availabilityRequestResponse.getProviderId());
+        } else{
+            Availability alreadyAvailability = alreadyPresentAvailability.get();
 
-    @Override
-    public Availability getByProviderAndLocation(Long locationId, Long providerId) {
-        return availabilityRepo.findByLocationIdAndProviderId(locationId, providerId);
-    }
+            //Creating provider availabilities blocked days
+            saveBlockedDays(availability2, alreadyAvailability.getId(), availabilityRequestResponse.getProviderId());
 
-    @Override
-    public void editAvailability(AvailabilityDTO availability) {
-        Availability availabilityEntity = availabilityRepo.findByLocationIdAndProviderId(availability.getLocationId(), availability.getProviderId());
-
-        if (Objects.isNull(availabilityEntity))
-            return;
-
-//        setBookingWindowDates(availability, availabilityEntity);
-        Set<DayWiseAvailability> dayWiseAvailabilityEntitySet = availability.getDayWiseAvailabilitySet().stream().map(dayWiseAvailability -> modelMapper.map(dayWiseAvailability, DayWiseAvailability.class)).collect(Collectors.toSet());
-        Set<BlockDay> blockDayEntitySet = availability.getBlockDaySet().stream().map(blockDay -> modelMapper.map(blockDay, BlockDay.class)).collect(Collectors.toSet());
-        availabilityEntity.setDayWiseAvailabilitySet(dayWiseAvailabilityEntitySet);
-        availabilityEntity.setBlockDaySet(blockDayEntitySet);
-        availabilityRepo.save(availabilityEntity);
-
-        //remove all date wise availability for start and end date
-        availabilityUtilityService.deleteInvalidDateWiseAvailabilities(availabilityEntity);
-    }
-
-//    @Override
-//    public void addAvailabilityByDate(AvailabilityByDateDTO availability) {
-//        List<AvailabilityByDate> availabilityByDateEntityList = availabilityByDateRepo.findAllByLocationIdAndProviderId(availability.getLocationEntity(), availability.getProviderEntity());
-//        ArrayList<AvailabilityByDate> availableAvailabilityList = new ArrayList<>(availabilityByDateEntityList.stream().
-//                filter(availabilityByDate -> (availabilityByDate.getAvailabilityOperationType().equals(AvailabilityOperationType.ADD) && availabilityByDate.getDate().equals(availability.getDate()))).toList());
-//
-//        ArrayList<AvailabilityByDate> disableAvailabilityList = new ArrayList<>(availabilityByDateEntityList.stream().
-//                filter(availabilityByDate -> (availabilityByDate.getAvailabilityOperationType().equals(AvailabilityOperationType.REMOVE)&& availabilityByDate.getDate().equals(availability.getDate()))).toList());
-//
-//        //refactor stored date wise availability
-//        switch (availability.getAvailabilityOperationType()) {
-//            case ADD -> {
-//                ArrayList<AvailabilityByDate> higherOrderList = availabilityUtilityService.mergeAndGetNewList(availableAvailabilityList, availability);
-//                ArrayList<AvailabilityByDate> lowerOrderList = availabilityUtilityService.compareAndDivideIntervals(higherOrderList, disableAvailabilityList, availability, AvailabilityOperationType.REMOVE);
-//                availabilityByDateRepo.deleteAll(availableAvailabilityList);
-//                availabilityByDateRepo.deleteAll(disableAvailabilityList);
-//                availabilityByDateRepo.saveAll(higherOrderList);
-//                availabilityByDateRepo.saveAll(lowerOrderList);
-//
-//                Availability availabilityEntity = availabilityRepo.findByLocationIdAndProviderId(availability.getLocationEntity(), availability.getProviderEntity());
-//                Set<BlockDay> newBlockDayEntitySet = availabilityUtilityService.createNewBlockDays(availabilityEntity.getBlockDaySet(), availability);
-//                availabilityEntity.setBlockDaySet(newBlockDayEntitySet);
-//                availabilityRepo.save(availabilityEntity);
-//            }
-//            case REMOVE -> {
-//                ArrayList<AvailabilityByDate> higherOrderList = availabilityUtilityService.mergeAndGetNewList(disableAvailabilityList, availability);
-//                ArrayList<AvailabilityByDate> lowerOrderList = availabilityUtilityService.compareAndDivideIntervals(higherOrderList, availableAvailabilityList, availability, AvailabilityOperationType.ADD);
-//                availabilityByDateRepo.deleteAll(availableAvailabilityList);
-//                availabilityByDateRepo.deleteAll(disableAvailabilityList);
-//                availabilityByDateRepo.saveAll(higherOrderList);
-//                availabilityByDateRepo.saveAll(lowerOrderList);
-//            }
-//        }
-//    }
-
-    @Override
-    public Set<AvailabilityResponse> getAvailability(AvailabilityRequest availabilityRequest) {
-        List<Long> providerEntityList = new ArrayList<>(availabilityRequest.getProviderUuidSet());
-        List<Long> locationEntityList = new ArrayList<>(availabilityRequest.getLocationUuidSet());
-
-        Set<AvailabilityResponse> availabilityResponseSet = new HashSet<>();
-        for (Long providerEntity : providerEntityList) {
-            for (Long locationEntity : locationEntityList) {
-                Availability availabilityEntity = availabilityRepo.findByLocationIdAndProviderId(locationEntity, providerEntity);
-                List<AvailabilityByDate> availabilityByDateEntity = availabilityByDateRepo.findAllByLocationIdAndProviderId(locationEntity, providerEntity);
-
-                AvailabilityResponse availabilityResponse = new AvailabilityResponse();
-
-                availabilityResponse.setProvider(providerEntity);
-                availabilityResponse.setLocation(locationEntity);
-                if(availabilityEntity != null) {
-                    availabilityResponse.setTimeZone(availabilityEntity.getBookingWindowTimeZone());
-                    Set<TimeDateInterval> timeDateIntervalSet = new HashSet<>();
-                    LocalDate fromDate = availabilityUtilityService.getFromDate(availabilityRequest.getMonth(), availabilityRequest.getYear(), availabilityEntity);
-                    LocalDate toDate = availabilityUtilityService.getToDate(fromDate);
-                    while(!fromDate.isAfter(toDate)) {
-                        AvailabilityUtilityService.TimeInterval currentTimeInterval = availabilityUtilityService.createTimeIntervalFromAvailabilityConfiguration(availabilityEntity, fromDate);
-                        LocalDate compareDate = fromDate;
-                        List<AvailabilityByDate> availabilityByDateEntityList = availabilityByDateRepo.findAllByLocationIdAndProviderId(locationEntity, providerEntity).stream().filter(availabilityByDate -> availabilityByDate.getDate().equals(compareDate)).toList();
-                        List<AvailabilityUtilityService.TimeInterval> finalIntervals = availabilityUtilityService.mergeDateWiseAvailabilityWithCurrentInterval(availabilityByDateEntityList, currentTimeInterval);
-                        for (AvailabilityUtilityService.TimeInterval timeInterval : finalIntervals) {
-                            LocalDateTime currentTimeSlotStartTime = LocalDateTime.of(fromDate, timeInterval.startTime);
-                            LocalDateTime currentTimeSlotEndTime = LocalDateTime.of(fromDate, timeInterval.endTime);
-
-                            // Convert the LocalDateTime objects to the same time zone
-                            LocalDateTime L1ConvertedStartTime = currentTimeSlotStartTime.atZone(ZoneId.of(availabilityEntity.getBookingWindowTimeZone().getValue())).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
-                            LocalDateTime L1ConvertedEndTime = currentTimeSlotEndTime.atZone(ZoneId.of(availabilityEntity.getBookingWindowTimeZone().getValue())).withZoneSameInstant(ZoneId.of("UTC")).toLocalDateTime();
-                            timeDateIntervalSet.add(new TimeDateInterval(L1ConvertedStartTime, L1ConvertedEndTime));
-                        }
-                        //add them in timDateIntervalSet
-                        fromDate = fromDate.plusDays(1);
-                    }
-                    availabilityResponse.setTimeDateIntervalSet(timeDateIntervalSet);
-                }
-                availabilityResponseSet.add(availabilityResponse);
-            }
+            //Creating Day Wise slots
+            saveDaySlots(availability2,alreadyAvailability.getId(), availabilityRequestResponse.getProviderId());
         }
-        return availabilityResponseSet;
     }
 
 
-    @Override
-    public List<AvailabilitySlots> createAvailabilitySlots(Long locationId, Long providerId) {
-        Availability availability = getByProviderAndLocation(locationId, providerId);
-        List<AvailabilitySlots> availabilitySlots = new ArrayList<>();
-        if (Objects.nonNull(availability)) {
+    private void saveBlockedDays(Availability availabilityVersion2, Long availabilityId, Long providerId) {
+        availabilityVersion2.getBlockDays().forEach(blockDays -> {
+            if (blockDaysRepository.findByProviderIdAndDate(providerId, blockDays.getDate()).isEmpty()) {
+                blockDays.setAvailabilityId(availabilityId);
+                blockDays.setProviderId(providerId);
+                blockDaysRepository.save(blockDays);
+            }
+        });
+    }
 
-            for (DayWiseAvailability daySlotCreation : availability.getDayWiseAvailabilitySet()) {
-                DayOfWeek dayOfWeek = DayOfWeek.valueOf(daySlotCreation.getDayOfWeek().toString());
-                LocalDate firstDate = LocalDate.now().with(TemporalAdjusters.next(dayOfWeek));
-                LocalDate lastDate = firstDate.plusWeeks(availability.getBookingWindow());
-                LocalDate slotDate = firstDate;
+    private void saveDaySlots(Availability availabilityVersion2, Long availabilityId, Long providerId) {
 
+        for (DayWiseSlotCreation daySlots : availabilityVersion2.getDaySlotCreations()) {
+            DayOfWeek dayOfWeek = DayOfWeek.valueOf(daySlots.getDay());
+            LocalDate firstDate = LocalDate.now().with(TemporalAdjusters.next(dayOfWeek));
+            LocalDate lastDate = firstDate.plusWeeks(availabilityVersion2.getBookingWindow());
+            LocalDate slotDate = firstDate;
+            Optional<DayWiseSlotCreation> alreadySlot = dayWiseSlotRepository.findByProviderIdAndDate(providerId, slotDate);
+
+            if (alreadySlot.isEmpty()) {
                 while (slotDate.isBefore(lastDate)) {
-                    LocalTime currentSlotTime = daySlotCreation.getStartTime();
-                    while (currentSlotTime.isBefore(daySlotCreation.getEndTime())) {
+                    log.info("Date : {} and Day : {}", slotDate , slotDate.getDayOfWeek());
+                    DayWiseSlotCreation dayWiseSlotCreation = new DayWiseSlotCreation();
 
-                        if (bookedSlotsRepository.findByDateAndProviderIdAndLocationIdAndStartTimeAndEndTime(slotDate, providerId, locationId, currentSlotTime, currentSlotTime.plusMinutes(availability.getInitialConsultTime())).isEmpty()) {
-                            availabilitySlots.add(AvailabilitySlots.builder()
-                                    .duration(availability.getInitialConsultTime())
-                                    .date(slotDate)
-                                    .status(SlotStatus.AVAILABLE.name())
-                                    .startTime(currentSlotTime)
-                                    .endTime(currentSlotTime.plusMinutes(availability.getInitialConsultTime()))
-                                    .providerId(providerId)
-                                    .build());
-                        }
-                        currentSlotTime = currentSlotTime.plusMinutes(availability.getInitialConsultTime()).plusMinutes(availability.getEventBuffer());
-                    }
+                    dayWiseSlotCreation.setDay(slotDate.getDayOfWeek().toString());
+                    dayWiseSlotCreation.setDate(slotDate);
+                    dayWiseSlotCreation.setStartTime(daySlots.getStartTime());
+                    dayWiseSlotCreation.setEndTime(daySlots.getEndTime());
+                    dayWiseSlotCreation.setAvailabilityId(availabilityId);
+                    dayWiseSlotCreation.setProviderId(providerId);
+                    dayWiseSlotRepository.save(dayWiseSlotCreation);
                     slotDate = slotDate.plusWeeks(1);
                 }
             }
         }
-        return availabilitySlots;
     }
 
+    @Override
+    public Page<AvailabilitySlots> getAvailabilitySlots(Long locationId, Long providerId, LocalDate date, int page, int size) {
+        List<AvailabilitySlots> availabilitySlots = new ArrayList<>();
 
+        Optional<Availability> existAvailability = availabilityRepository.findByProviderIdAndLocationId(providerId, locationId);
+        Optional<DayWiseSlotCreation> existDaySlots = dayWiseSlotRepository.findDaySlotsByProviderIdLocationIdAndDateNative(providerId, locationId, date);
+
+        if (existDaySlots.isPresent() && existAvailability.isPresent()) {
+            DayWiseSlotCreation dayWiseSlotCreation = existDaySlots.get();
+            Availability availability = existAvailability.get();
+
+                LocalTime currentSlotTime = dayWiseSlotCreation.getStartTime();
+                while (currentSlotTime.isBefore(dayWiseSlotCreation.getEndTime())) {
+
+                    if (bookedSlotsRepository.findByDateAndProviderIdAndLocationIdAndStartTimeAndEndTime(date, providerId, locationId, currentSlotTime, currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime())).isEmpty()) {
+                        availabilitySlots.add(AvailabilitySlots.builder()
+                                .duration(availability.getInPersonInitialConsultTime())
+                                .date(date)
+                                .status(SlotStatus.AVAILABLE.name())
+                                .startTime(currentSlotTime)
+                                .endTime(currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime()))
+                                .providerId(providerId)
+                                .build());
+                    }
+                    currentSlotTime = currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime()).plusMinutes(availability.getBufferTime());
+                }
+
+        }
+
+        Pageable pageable = PageRequest.of(page, size);
+        final int start = (int)pageable.getOffset();
+        final int end = Math.min((start + pageable.getPageSize()), availabilitySlots.size());
+
+        return new PageImpl<>(availabilitySlots.subList(start, end), pageable, availabilitySlots.size());
+    }
 
     @Override
     public BookedSlots bookSlots(AppointmentSlotBookRequest appointmentSlotBookRequest){
-          return bookedSlotsRepository.save(BookedSlots.builder()
+        return bookedSlotsRepository.save(BookedSlots.builder()
                 .appointmentId(appointmentSlotBookRequest.getAppointmentId())
                 .date(appointmentSlotBookRequest.getDate())
                 .startTime(appointmentSlotBookRequest.getStartTime())
@@ -203,14 +156,6 @@ public class AvailabilityServiceImpl implements AvailabilityService {
                 .locationId(appointmentSlotBookRequest.getLocationId())
                 .build());
     }
-
-
-
-
-
-
-
-
 
 
 
