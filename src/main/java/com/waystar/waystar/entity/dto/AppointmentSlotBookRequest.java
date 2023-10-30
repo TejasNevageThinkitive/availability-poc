@@ -11,8 +11,8 @@ import java.time.LocalTime;
 
 @Data
 @Builder
-@AllArgsConstructor
 @NoArgsConstructor
+@AllArgsConstructor
 public class AppointmentSlotBookRequest {
 
     @NotNull

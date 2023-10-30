@@ -1,6 +1,7 @@
 package com.waystar.waystar.service.impl;
 
 import com.waystar.waystar.entity.Availability;
+import com.waystar.waystar.entity.BlockDays;
 import com.waystar.waystar.entity.BookedSlots;
 import com.waystar.waystar.entity.DayWiseSlotCreation;
 import com.waystar.waystar.entity.dto.AppointmentSlotBookRequest;
@@ -123,7 +124,12 @@ public class AvailabilityServiceImpl implements AvailabilityService {
             LocalTime currentSlotTime = dayWiseSlotCreation.getStartTime();
             while (currentSlotTime.isBefore(dayWiseSlotCreation.getEndTime())) {
 
-                if (bookedSlotsRepository.findByDateAndProviderIdAndLocationIdAndStartTimeAndEndTime(date, providerId, locationId, currentSlotTime, currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime())).isEmpty()) {
+                boolean bookedSlots = bookedSlotsRepository.findByDateAndProviderIdAndLocationIdAndStartTimeAndEndTime
+                        (date, providerId, locationId, currentSlotTime, currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime())).isEmpty();
+
+                boolean blockedSlots = blockDaysRepository.existByStartTimeEndTimeAndProvider(currentSlotTime, currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime()), providerId).isEmpty();
+
+                if (bookedSlots && blockedSlots) {
                     availabilitySlots.add(AvailabilitySlots.builder()
                             .duration(availability.getInPersonInitialConsultTime())
                             .date(date)
@@ -162,9 +168,35 @@ public class AvailabilityServiceImpl implements AvailabilityService {
     }
 
     @Override
-    public DayWiseSlotCreation updateDayWiseSlots(DayWiseSlotCreation dayWiseSlotCreation){
-        DayWiseSlotCreation dayWiseSlotCreation2 =  modelMapper.map(dayWiseSlotCreation, DayWiseSlotCreation.class);
-        return dayWiseSlotRepository.save(dayWiseSlotCreation2);
+    public DayWiseSlotCreation updateDayWiseSlots(DayWiseSlotCreation dayWiseSlotCreation) {
+        switch (dayWiseSlotCreation.getAction()) {
+            case ADD -> {
+                return addSlots(dayWiseSlotCreation);
+            }
+
+            case REMOVE -> {
+                return removeSlots(dayWiseSlotCreation);
+            }
+
+            default -> {
+                return null;
+            }
+        }
+    }
+
+    private DayWiseSlotCreation addSlots(DayWiseSlotCreation dayWiseSlotCreationRequest) {
+        DayWiseSlotCreation dayWiseSlotCreation = modelMapper.map(dayWiseSlotCreationRequest, DayWiseSlotCreation.class);
+        return dayWiseSlotRepository.save(dayWiseSlotCreation);
+    }
+
+    private DayWiseSlotCreation removeSlots(DayWiseSlotCreation dayWiseSlotCreation) {
+        BlockDays.builder()
+                .availabilityId(dayWiseSlotCreation.getAvailabilityId())
+                .date(dayWiseSlotCreation.getDate())
+                .startTime(dayWiseSlotCreation.getStartTime())
+                .endTime(dayWiseSlotCreation.getEndTime())
+                .providerId(dayWiseSlotCreation.getProviderId()).build();
+        return dayWiseSlotCreation;
     }
 
 

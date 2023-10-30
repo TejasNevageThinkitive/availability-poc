@@ -21,7 +21,6 @@ public class AvailabilityRequestResponse {
     @NotNull
     private String availabilitySettingType;
 
-
     private int inPersonInitialConsultTime;
 
     private Long inPersonFollowupConsultTime;

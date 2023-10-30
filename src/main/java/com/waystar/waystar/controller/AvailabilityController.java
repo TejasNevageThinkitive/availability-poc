@@ -45,7 +45,6 @@ public class AvailabilityController {
         return availabilityService.getProviderDaySlot(providerId, locationId, date);
     }
 
-
     @PutMapping("/update/day-slots")
     public DayWiseSlotCreation updateDayWiseSlot(@RequestBody DayWiseSlotCreation dayWiseSlotCreation){
         return availabilityService.updateDayWiseSlots(dayWiseSlotCreation);

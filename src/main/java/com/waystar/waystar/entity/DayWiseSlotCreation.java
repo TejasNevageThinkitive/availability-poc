@@ -1,5 +1,6 @@
 package com.waystar.waystar.entity;
 
+import com.waystar.waystar.entity.dto.UpdateAction;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -43,6 +44,9 @@ public class DayWiseSlotCreation  implements Serializable {
     private Long availabilityId;
 
     private Long providerId;
+
+    @Transient
+    private UpdateAction action;
 
 }
 
