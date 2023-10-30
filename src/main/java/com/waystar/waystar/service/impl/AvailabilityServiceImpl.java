@@ -127,7 +127,7 @@ public class AvailabilityServiceImpl implements AvailabilityService {
                 boolean bookedSlots = bookedSlotsRepository.findByDateAndProviderIdAndLocationIdAndStartTimeAndEndTime
                         (date, providerId, locationId, currentSlotTime, currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime())).isEmpty();
 
-                boolean blockedSlots = blockDaysRepository.existByStartTimeEndTimeAndProvider(currentSlotTime, currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime()), providerId).isEmpty();
+                boolean blockedSlots = blockDaysRepository.existByStartTimeEndTimeAndProviderAndDate(currentSlotTime, currentSlotTime.plusMinutes(availability.getInPersonInitialConsultTime()), providerId, date).isEmpty();
 
                 if (bookedSlots && blockedSlots) {
                     availabilitySlots.add(AvailabilitySlots.builder()
@@ -190,12 +190,12 @@ public class AvailabilityServiceImpl implements AvailabilityService {
     }
 
     private DayWiseSlotCreation removeSlots(DayWiseSlotCreation dayWiseSlotCreation) {
-        BlockDays.builder()
+        blockDaysRepository.save(BlockDays.builder()
                 .availabilityId(dayWiseSlotCreation.getAvailabilityId())
                 .date(dayWiseSlotCreation.getDate())
                 .startTime(dayWiseSlotCreation.getStartTime())
                 .endTime(dayWiseSlotCreation.getEndTime())
-                .providerId(dayWiseSlotCreation.getProviderId()).build();
+                .providerId(dayWiseSlotCreation.getProviderId()).build());
         return dayWiseSlotCreation;
     }
 
